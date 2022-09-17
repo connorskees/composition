@@ -126,7 +126,7 @@ class RenderableNote {
     }
 
     context.setTransform(1, 0, 0, 1, 0, 0);
-    context.strokeStyle = "#ff0000"
+    // context.strokeStyle = "#ff0000"
     // context.strokeRect(x + 6, y + 12, 15, 43);
     // context.strokeRect(x - 2, y + 43, 25, 14);
 
@@ -230,13 +230,13 @@ function isMouseInBox(pos: MousePosition, box: BoundingBox): boolean {
 }
 
 class Bar {
-  private shouldRender: boolean = true;
-
   public idx: number = -1;
 
   public get x() {
     return this.idx * 250 + 35;
   }
+
+  public hasActiveOrHovered = false;
 
   public y: number = 0;
   public offset: [number, number] = [0,0];
@@ -268,25 +268,33 @@ class Bar {
 
     let hitNote = null;
 
+    this.hasActiveOrHovered = false;
+
     for (let noteIdx = 0; noteIdx < this.notes.length; noteIdx += 1) {
-      const note = this.notes[noteIdx]!;
+      const note = this.notes[noteIdx];
 
       const x = this.x + noteIdx * 50;
       const y = this.y + note.heightFromPitch();
 
       this.adjustNoteBbox(note, x, y);
+
+      const isActive = activeNote === note;
+
+      this.hasActiveOrHovered ||= isActive;
       
       const hitThisNote = note.drawNote(
         context,
         x,
         y + 50,
         mousePosition,
-        activeNote === note,
+        isActive,
         mouseInBox,
       );
 
       hitNote ??= hitThisNote;
     }
+
+    this.hasActiveOrHovered ||= !!hitNote;
 
     return hitNote;
   }
@@ -333,10 +341,21 @@ function drawNotes(
 ): RenderableNote | null {
   let hitNote = null;
 
+  const skipped = new Set();
+
   for (let barIdx = 0; barIdx < bars.length; barIdx += 4) {
+    const barsRange = bars.slice(barIdx, barIdx + 4);
     const y = Math.floor(barIdx / 4) * 100;
 
-    if ((mousePosition.y - 100 > y + offset[1] || mousePosition.y + 100 < y + offset[1]) && linesRendered.has(barIdx)) {
+    if (
+      (mousePosition.y - 100 > y + offset[1] || mousePosition.y + 100 < y + offset[1])
+      && linesRendered.has(barIdx)
+      && !barsRange.some(bar => bar.hasActiveOrHovered)
+    ) {
+      skipped.add(barIdx);
+      skipped.add(barIdx+1);
+      skipped.add(barIdx+2);
+      skipped.add(barIdx+3);
       continue;
     }
 
@@ -348,10 +367,9 @@ function drawNotes(
   for (let barIdx = 0; barIdx < bars.length; barIdx++) {
     const bar = bars[barIdx];
 
-    // const x = barIdx * 250 + 35;// + offset[0];
-    const y = Math.floor(barIdx / 4) * 100; // offset[1];
+    const y = Math.floor(barIdx / 4) * 100;
 
-    if ((mousePosition.y - 100 > y + offset[1] || mousePosition.y + 100 < y + offset[1]) && hasRendered.has(barIdx)) {
+    if (skipped.has(barIdx)) {
       continue;
     }
 
@@ -368,7 +386,7 @@ function drawNotes(
   return hitNote;
 }
 
-const bars = [...Array(20)].map((idx, _) => (new Bar(
+const bars = [...Array(800)].map((idx, _) => (new Bar(
   [...Array(4)].map(() => (new RenderableNote({
     value: randomChoice(Object.keys(NoteValue)) as NoteValue,
     pitch: randomChoice(Object.keys(NotePitch)) as NotePitch,
@@ -455,7 +473,6 @@ const Canvas: React.FC<{
   const { mouseX, mouseY, isMousePressed, scrollPos } = useMousePos();
 
   const [activeNote, setActiveNote] = React.useState<RenderableNote | null>(null);
-
   const [hoveredNote, setHoveredNote] = React.useState<RenderableNote | null>(null);
 
   const handleClick = React.useCallback(({ clientX, clientY }: { clientX: number, clientY: number }) => {
@@ -511,11 +528,7 @@ const Canvas: React.FC<{
     setHoveredNote(hitNote);
     const canvasStyle = canvasRef.current!.style;
     if (hitNote) {
-      if (isMousePressed && activeNote) {
-        canvasStyle.cursor = "grabbing";
-      } else {
-        canvasStyle.cursor = "pointer";
-      }
+      canvasStyle.cursor = "pointer";
     } else {
       canvasStyle.cursor = "auto";
     }
