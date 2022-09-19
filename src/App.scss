@@ -34,6 +34,7 @@ canvas {
       cursor: pointer;
       border-radius: 5px;
       padding: 5px 10px;
+      color: black;
 
       &:hover {
         background-color: rgb(223, 223, 255);
@@ -41,7 +42,11 @@ canvas {
 
       &.active {
         color: blue;
-      }  
+      }
+
+      &:disabled {
+        color: #eee;
+      }
     }
   }
 

@@ -4,6 +4,51 @@ import { Ribbon } from './Ribbon';
 import { BoundingBox, MousePosition, MusicalNote, Note, NotePitch, NoteValue } from './common';
 import { getHalfNoteCtx, getQuarterNoteCtx, getWholeNoteCtx, halfNotePath, quarterNotePath, wholeNotePath } from './Notes';
 
+import {
+  SharedString, ContainerSchema, IFluidContainer, ConnectionState } from "fluid-framework";
+import { TinyliciousClient } from "@fluidframework/tinylicious-client";
+
+const useSharedString = (): SharedString => {
+  const [sharedString, setSharedString] = React.useState<SharedString>();
+  const getFluidData = async () => {
+    // Configure the container.
+    const client: TinyliciousClient = new TinyliciousClient();
+    const containerSchema: ContainerSchema = {
+      initialObjects: { sharedString: SharedString }
+    }
+
+    // Get the container from the Fluid service.
+    let container: IFluidContainer;
+    const containerId = window.location.hash.substring(1);
+    if (!containerId) {
+      ({ container } = await client.createContainer(containerSchema));
+      const id = await container.attach();
+      window.location.hash = id;
+      // Return the Fluid SharedString object.
+      return container.initialObjects.sharedString as SharedString;
+    }
+
+    ({ container } = await client.getContainer(containerId, containerSchema));
+    if (container.connectionState !== ConnectionState.Connected) {
+      await new Promise<void>((resolve) => {
+        container.once("connected", () => {
+          resolve();
+        });
+      });
+    }
+    // Return the Fluid SharedString object.
+    return container.initialObjects.sharedString as SharedString;
+  }
+
+  // Get the Fluid Data data on app startup and store in the state
+  React.useEffect(() => {
+    getFluidData()
+      .then((data) => setSharedString(data));
+  }, []);
+
+  return sharedString as SharedString;
+}
+
 function isNote(note: MusicalNote): note is Note {
   return "pitch" in note;
 }
@@ -40,6 +85,8 @@ class RenderableNote {
   private _boundingBox?: BoundingBox;
 
   yOffset: number = 0.0;
+
+  isActive: boolean = false;
 
   constructor(private readonly note: MusicalNote) {}
 
@@ -216,7 +263,7 @@ class Bar {
   public offset: [number, number] = [0,0];
 
   constructor(
-    private notes: RenderableNote[],
+    public notes: RenderableNote[],
   ) {}
 
   hitNote(mousePosition: MousePosition): RenderableNote | null {
@@ -235,8 +282,9 @@ class Bar {
 
   render(
     context: CanvasRenderingContext2D,
+    sharedString: SharedString,
+    noteIdxOffset: number,
     mousePosition: MousePosition,
-    activeNote: RenderableNote | null,
   ) {
     const mouseInBox = isMouseInBox(mousePosition, this.bbox);
 
@@ -244,8 +292,11 @@ class Bar {
 
     this.hasActiveOrHovered = false;
 
-    for (let noteIdx = 0; noteIdx < this.notes.length; noteIdx += 1) {
-      const note = this.notes[noteIdx];
+    for (let noteIdx = 0; noteIdx < 4; noteIdx += 1) {
+      const segment = sharedString.getContainingSegment(noteIdx + noteIdxOffset);
+      const props = segment.segment.properties;
+
+      const note = new RenderableNote(props as MusicalNote);
 
       const x = this.x + noteIdx * 50;
       const y = this.y + note.heightFromPitch();
@@ -254,7 +305,7 @@ class Bar {
 
       note.yOffset = this.y;
 
-      const isActive = activeNote === note;
+      const isActive = !!props?.isActive;
 
       this.hasActiveOrHovered ||= isActive;
       
@@ -267,7 +318,7 @@ class Bar {
         mouseInBox,
       );
 
-      hitNote ??= hitThisNote;
+      hitNote ??= hitThisNote ? noteIdx + noteIdxOffset : null;
     }
 
     this.hasActiveOrHovered ||= !!hitNote;
@@ -311,10 +362,10 @@ const hasRendered = new Set();
 
 function drawNotes(
   context: CanvasRenderingContext2D,
+  sharedString: SharedString,
   offset: [number, number],
   mousePosition: MousePosition,
-  activeNote: RenderableNote | null,
-): RenderableNote | null {
+): number | null {
   let hitNote = null;
 
   const skipped = new Set();
@@ -355,7 +406,7 @@ function drawNotes(
     bar.y = y;
     bar.offset = offset;
 
-    const hitThisNote = bar.render(context, mousePosition, activeNote);
+    const hitThisNote = bar.render(context, sharedString, barIdx * 4, mousePosition);
     hitNote ??= hitThisNote
   }
 
@@ -441,66 +492,62 @@ function useMousePos() {
 }
 
 const Canvas: React.FC<{
+  sharedString: SharedString,
+  activeNote: number | null,
+  setActiveNote: (n: number | null) => void;
   activeNoteValue: NoteValue | null;
   setActiveNoteValue: (v: NoteValue | null) => void;
-  activeNotePitch: NotePitch | null;
-  setActiveNotePitch: (v: NotePitch | null) => void;
-}> = ({ activeNoteValue, setActiveNoteValue, activeNotePitch, setActiveNotePitch }) => {
+}> = ({ sharedString, activeNote, setActiveNote, activeNoteValue }) => {
   const { mouseX, mouseY, isMousePressed, scrollPos } = useMousePos();
 
-  const [activeNote, setActiveNote] = React.useState<RenderableNote | null>(null);
-  const [hoveredNote, setHoveredNote] = React.useState<RenderableNote | null>(null);
+  const [hoveredNote, setHoveredNote] = React.useState<number | null>(null);
 
   const handleClick = React.useCallback(({ clientX, clientY }: { clientX: number, clientY: number }) => {
     if (activeNote === hoveredNote) {
       return;
     }
 
+    if (activeNote !== null) {
+      sharedString.annotateRange(activeNote, activeNote + 1, { isActive: false });
+    }
+
+    if (hoveredNote === null) {
+      setActiveNote(null);
+      return;
+    }
+
+    sharedString.annotateRange(hoveredNote, hoveredNote + 1, { isActive: true });
+
     setActiveNote(hoveredNote);
-
-    if (hoveredNote) {
-      setActiveNoteValue(hoveredNote.value);
-      setActiveNotePitch(hoveredNote.pitch);
-    } else {
-      setActiveNoteValue(null);
-      setActiveNotePitch(null);
-    }
-  }, [setActiveNoteValue, setActiveNotePitch, activeNote, hoveredNote]);
-
-  React.useEffect(() => {
-    if (activeNoteValue && activeNote && activeNoteValue !== activeNote?.value) {
-      activeNote.value = activeNoteValue;
-    }
-  }, [activeNoteValue, activeNote])
-
-  React.useEffect(() => {
-    if (activeNotePitch !== null && activeNote && activeNotePitch !== activeNote?.pitch) {
-      activeNote.pitch = activeNotePitch;
-    }
-  }, [activeNotePitch, activeNote])
+  }, [activeNote, hoveredNote, sharedString, setActiveNote]);
 
   const { canvasRef, canvasOffset, context } = useCanvas(handleClick);
 
+  // modify pitch
   React.useEffect(() => {
-    if (activeNotePitch === null || !activeNote || !isMousePressed) {
+    if (activeNote === null || !isMousePressed || !sharedString || (hoveredNote !== null && hoveredNote !== activeNote)) {
       return;
     }
 
-    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - activeNote.yOffset);
+    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - Math.floor(activeNote / 16) * 100); //  - activeNote.yOffset
 
-    if (potentialPitch === null || potentialPitch === activeNote?.pitch) {
+    const segment = sharedString.getContainingSegment(activeNote);
+    const { pitch } = segment?.segment?.properties ?? {};
+
+    if (potentialPitch === null || potentialPitch === pitch || pitch === undefined) {
       return;
     }
 
-    setActiveNotePitch(potentialPitch);
-  }, [activeNotePitch, mouseY, canvasOffset, activeNote, setActiveNotePitch, isMousePressed]);
+    sharedString.annotateRange(activeNote, activeNote + 1, { pitch: potentialPitch });
+  }, [sharedString, mouseY, canvasOffset, activeNote, isMousePressed, hoveredNote]);
 
+  // draw notes+bars
   React.useEffect(() => {
     if (!context) {
       return;
     }
 
-    const hitNote = drawNotes(context, canvasOffset, { x: mouseX, y: mouseY }, activeNote);
+    const hitNote = drawNotes(context, sharedString, canvasOffset, { x: mouseX, y: mouseY });
     setHoveredNote(hitNote);
     const canvasStyle = canvasRef.current!.style;
     if (hitNote) {
@@ -508,24 +555,55 @@ const Canvas: React.FC<{
     } else {
       canvasStyle.cursor = "auto";
     }
-  }, [mouseX, mouseY, context, canvasOffset, activeNote, activeNoteValue, isMousePressed, canvasRef, scrollPos]);
+  }, [sharedString, mouseX, mouseY, context, canvasOffset, activeNote, isMousePressed, canvasRef, scrollPos, activeNoteValue]);
 
   return <canvas width="1000" height="1000" ref={canvasRef}></canvas>;
 }
 
 function App() {
+  const [activeNote, setActiveNote] = React.useState<number | null>(null);
   const [activeNoteValue, setActiveNoteValue] = React.useState<NoteValue | null>(null);
-  const [activeNotePitch, setActiveNotePitch] = React.useState<NotePitch | null>(null);
+
+  const sharedString = useSharedString();
+  
+  React.useEffect(() => {
+    const segment = activeNote === null ? null : sharedString?.getContainingSegment(activeNote);
+    const { value } = segment?.segment.properties ?? {};
+
+    setActiveNoteValue(value);
+  }, [activeNote, sharedString])
+  
+  React.useEffect(() => {
+    if (!sharedString) {
+      return;
+    }
+
+    for (const bar of bars) {
+      for (const note of bar.notes) {
+        const len = sharedString.getLength();
+
+        sharedString.insertText(len, 'X');
+        sharedString.annotateRange(len, len + 1, { value: note.value, pitch: note.pitch });
+      }
+    }
+  }, [sharedString]);
 
   return (
     <>
-      <Ribbon activeNoteValue={activeNoteValue} setActiveNoteValue={setActiveNoteValue} />
-      <Canvas
-        activeNoteValue={activeNoteValue}
+      <Ribbon
+        sharedString={sharedString}
+        activeNoteValue={activeNoteValue ?? null}
         setActiveNoteValue={setActiveNoteValue}
-        activeNotePitch={activeNotePitch}
-        setActiveNotePitch={setActiveNotePitch}
+        activeNote={activeNote}
+        setActiveNote={setActiveNote}
       />
+      {sharedString && <Canvas
+        sharedString={sharedString}
+        activeNoteValue={activeNoteValue ?? null}
+        setActiveNoteValue={setActiveNoteValue}
+        activeNote={activeNote}
+        setActiveNote={setActiveNote}
+      />}
     </>
   );
 }
