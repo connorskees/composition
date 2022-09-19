@@ -3,19 +3,11 @@ export enum NoteValue {
     Whole = 'Whole',
     Half = 'Half',
     Quarter = 'Quarter',
-    Eighth = 'Eighth',
-    Sixteenth = 'Sixteenth',
+    // Eighth = 'Eighth',
+    // Sixteenth = 'Sixteenth',
 }
 
-export enum NotePitch {
-    A = 'A',
-    B = 'B',
-    C = 'C',
-    D = 'D',
-    E = 'E',
-    F = 'F',
-    G = 'G',
-}
+export type NotePitch = number;
 
 export interface Note {
     value: NoteValue,

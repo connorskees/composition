@@ -15,7 +15,7 @@ function drawLines(context: CanvasRenderingContext2D, y: number): void {
 
   context.fillStyle = "#ffffff";
   context.strokeStyle = "#000000"
-  context.fillRect(0, y + 25, canvasWidth, 95);
+  context.fillRect(0, y + 20, canvasWidth, 100);
 
   // context.lineWidth = 0;
 
@@ -39,6 +39,8 @@ const BAR_SPACING: number = 10;
 class RenderableNote {
   private _boundingBox?: BoundingBox;
 
+  yOffset: number = 0.0;
+
   constructor(private readonly note: MusicalNote) {}
 
   public get value(): NoteValue {
@@ -50,7 +52,7 @@ class RenderableNote {
   }
 
   public set pitch(p: NotePitch | null) {
-    if (!isNote(this.note) || !p) {
+    if (!isNote(this.note) || p === null) {
       return;
     }
 
@@ -70,22 +72,7 @@ class RenderableNote {
       return 0;
     }
 
-    switch (this.note.pitch) {
-      case NotePitch.A:
-        return -15;
-      case NotePitch.B:
-        return -20;
-      case NotePitch.C:
-        return -25;
-      case NotePitch.D:
-        return -30;
-      case NotePitch.E:
-        return 0;
-      case NotePitch.F:
-        return -5;
-      case NotePitch.G:
-        return -10;
-    }
+    return this.note.pitch * -5;
   }
 
   drawNote(
@@ -126,9 +113,6 @@ class RenderableNote {
     }
 
     context.setTransform(1, 0, 0, 1, 0, 0);
-    // context.strokeStyle = "#ff0000"
-    // context.strokeRect(x + 6, y + 12, 15, 43);
-    // context.strokeRect(x - 2, y + 43, 25, 14);
 
     return mouseInBox ? this : null;
   }
@@ -149,7 +133,6 @@ class RenderableNote {
       const { ball, stem } = halfNotePath();
       context.transform(-1, 0, 0, -1, 247.5, 272);
       context.translate(-x, -y);
-      // context.strokeRect(x, y, 14.566, 41.17);
       context.stroke(stem);
       context.fill(ball, "evenodd");
     }
@@ -205,24 +188,15 @@ function randomChoice<T>(elems: T[]): T {
 }
 
 function pitchFromHeight(height: number): NotePitch | null {
-  switch (height) {
-    case -15:
-      return NotePitch.A;
-    case -20:
-      return NotePitch.B;
-    case -25:
-      return NotePitch.C;
-    case -30:
-      return NotePitch.D;
-    case 0:
-      return NotePitch.E;
-    case -5:
-      return NotePitch.F;
-    case -10:
-      return NotePitch.G;
-    default:
-      return null;
+  if (height < -45) {
+    return null;
   }
+
+  if (height > 5) {
+    return null;
+  }
+
+  return Math.floor(height / -5);
 }
 
 function isMouseInBox(pos: MousePosition, box: BoundingBox): boolean {
@@ -278,6 +252,8 @@ class Bar {
 
       this.adjustNoteBbox(note, x, y);
 
+      note.yOffset = this.y;
+
       const isActive = activeNote === note;
 
       this.hasActiveOrHovered ||= isActive;
@@ -324,9 +300,9 @@ class Bar {
   get bbox(): BoundingBox {
     return {
       x: this.x + this.offset[0],
-      y: this.y + this.offset[1],
+      y: this.y + this.offset[1] - 25,
       width: 250,
-      height: 50,
+      height: 100,
     }
   }
 }
@@ -386,10 +362,10 @@ function drawNotes(
   return hitNote;
 }
 
-const bars = [...Array(800)].map((idx, _) => (new Bar(
+const bars = [...Array(20)].map((idx, _) => (new Bar(
   [...Array(4)].map(() => (new RenderableNote({
     value: randomChoice(Object.keys(NoteValue)) as NoteValue,
-    pitch: randomChoice(Object.keys(NotePitch)) as NotePitch,
+    pitch: randomChoice([-1, 0, 1, 2, 3, 4, 5, 6, 7])
   })))
 )));
  
@@ -498,7 +474,7 @@ const Canvas: React.FC<{
   }, [activeNoteValue, activeNote])
 
   React.useEffect(() => {
-    if (activeNotePitch && activeNote && activeNotePitch !== activeNote?.pitch) {
+    if (activeNotePitch !== null && activeNote && activeNotePitch !== activeNote?.pitch) {
       activeNote.pitch = activeNotePitch;
     }
   }, [activeNotePitch, activeNote])
@@ -506,13 +482,13 @@ const Canvas: React.FC<{
   const { canvasRef, canvasOffset, context } = useCanvas(handleClick);
 
   React.useEffect(() => {
-    if (!activeNotePitch || !activeNote || !isMousePressed) {
+    if (activeNotePitch === null || !activeNote || !isMousePressed) {
       return;
     }
 
-    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1]);
+    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - activeNote.yOffset);
 
-    if (!potentialPitch || potentialPitch === activeNote?.pitch) {
+    if (potentialPitch === null || potentialPitch === activeNote?.pitch) {
       return;
     }
 
