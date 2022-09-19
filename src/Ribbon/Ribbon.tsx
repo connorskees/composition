@@ -47,7 +47,7 @@ export const Ribbon: React.FC<{
         }
 
         sharedString.annotateRange(activeNote, activeNote + 1, { value: activeNoteValue });
-    }, [activeNoteValue, activeNote, sharedString])
+    }, [activeNoteValue, sharedString])
 
     return <>
         <div className="ribbon">
