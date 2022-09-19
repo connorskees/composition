@@ -27,8 +27,10 @@ canvas {
     padding: 10px 50px 0 50px;
 
     button {
+      height: 75;
+      border: 1px solid red;
+      width: 50;
       background: none;
-      border: none;
       cursor: pointer;
       border-radius: 5px;
       padding: 5px 10px;
