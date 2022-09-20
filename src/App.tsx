@@ -294,7 +294,7 @@ class Bar {
 
     for (let noteIdx = 0; noteIdx < 4; noteIdx += 1) {
       const segment = sharedString.getContainingSegment(noteIdx + noteIdxOffset);
-      const props = segment.segment.properties;
+      const props = segment.segment?.properties;
 
       const note = new RenderableNote(props as MusicalNote);
 
@@ -362,7 +362,7 @@ const hasRendered = new Set();
 
 function drawNotes(
   context: CanvasRenderingContext2D,
-  sharedString: SharedString | undefined,
+  sharedString: SharedString,
   offset: [number, number],
   mousePosition: MousePosition,
 ): number | null {
@@ -389,11 +389,7 @@ function drawNotes(
     linesRendered.add(barIdx);
 
     drawLines(context, y);
-  }
-
-  if (!sharedString) {
-    return null;
-  }
+  }  
 
   for (let barIdx = 0; barIdx < bars.length; barIdx++) {
     const bar = bars[barIdx];
@@ -496,7 +492,7 @@ function useMousePos() {
 }
 
 const Canvas: React.FC<{
-  sharedString: SharedString | undefined,
+  sharedString: SharedString,
   activeNote: number | null,
   setActiveNote: (n: number | null) => void;
   activeNoteValue: NoteValue | null;
@@ -529,7 +525,7 @@ const Canvas: React.FC<{
 
   // modify pitch
   React.useEffect(() => {
-    if (activeNote === null || !isMousePressed || !sharedString || (hoveredNote !== null && hoveredNote !== activeNote)) {
+    if (activeNote === null || !isMousePressed || (hoveredNote !== null && hoveredNote !== activeNote)) {
       return;
     }
 
@@ -601,7 +597,7 @@ function App() {
         activeNote={activeNote}
         setActiveNote={setActiveNote}
       />
-      {<Canvas
+      {sharedString && <Canvas
         sharedString={sharedString}
         activeNoteValue={activeNoteValue ?? null}
         setActiveNoteValue={setActiveNoteValue}
