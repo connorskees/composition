@@ -8,7 +8,7 @@ import {
   SharedString, ContainerSchema, IFluidContainer, ConnectionState } from "fluid-framework";
 import { TinyliciousClient } from "@fluidframework/tinylicious-client";
 
-const useSharedString = (): SharedString => {
+const useSharedString = (): SharedString | undefined => {
   const [sharedString, setSharedString] = React.useState<SharedString>();
   const getFluidData = async () => {
     // Configure the container.
@@ -362,7 +362,7 @@ const hasRendered = new Set();
 
 function drawNotes(
   context: CanvasRenderingContext2D,
-  sharedString: SharedString,
+  sharedString: SharedString | undefined,
   offset: [number, number],
   mousePosition: MousePosition,
 ): number | null {
@@ -389,6 +389,10 @@ function drawNotes(
     linesRendered.add(barIdx);
 
     drawLines(context, y);
+  }
+
+  if (!sharedString) {
+    return null;
   }
 
   for (let barIdx = 0; barIdx < bars.length; barIdx++) {
@@ -492,7 +496,7 @@ function useMousePos() {
 }
 
 const Canvas: React.FC<{
-  sharedString: SharedString,
+  sharedString: SharedString | undefined,
   activeNote: number | null,
   setActiveNote: (n: number | null) => void;
   activeNoteValue: NoteValue | null;
@@ -508,7 +512,7 @@ const Canvas: React.FC<{
     }
 
     if (activeNote !== null) {
-      sharedString.annotateRange(activeNote, activeNote + 1, { isActive: false });
+      sharedString?.annotateRange(activeNote, activeNote + 1, { isActive: false });
     }
 
     if (hoveredNote === null) {
@@ -516,7 +520,7 @@ const Canvas: React.FC<{
       return;
     }
 
-    sharedString.annotateRange(hoveredNote, hoveredNote + 1, { isActive: true });
+    sharedString?.annotateRange(hoveredNote, hoveredNote + 1, { isActive: true });
 
     setActiveNote(hoveredNote);
   }, [activeNote, hoveredNote, sharedString, setActiveNote]);
@@ -597,7 +601,7 @@ function App() {
         activeNote={activeNote}
         setActiveNote={setActiveNote}
       />
-      {sharedString && <Canvas
+      {<Canvas
         sharedString={sharedString}
         activeNoteValue={activeNoteValue ?? null}
         setActiveNoteValue={setActiveNoteValue}

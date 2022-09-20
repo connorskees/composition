@@ -37,12 +37,12 @@ const NoteMap: Record<NoteValue, React.ReactNode> = {
 export const Ribbon: React.FC<{
     activeNote: number | null,
     setActiveNote: (n: number | null) => void;
-    sharedString: SharedString;
+    sharedString: SharedString | undefined;
     activeNoteValue: NoteValue | null;
     setActiveNoteValue: (v: NoteValue | null) => void;
 }> = ({ sharedString, activeNote, activeNoteValue, setActiveNoteValue }) => {
     React.useEffect(() => {
-        if (activeNote === null || activeNoteValue === null) {
+        if (activeNote === null || activeNoteValue === null || !sharedString) {
             return;
         }
 
