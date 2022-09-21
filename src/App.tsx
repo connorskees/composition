@@ -561,7 +561,6 @@ const Canvas: React.FC<{
 }
 
 function getActiveNote(sharedString: SharedString | undefined): number | null {
-  console.log({sharedString});
   if (!sharedString) {
     return null;
   }
