@@ -16,20 +16,19 @@ canvas {
   top: 0;
   left: 0;
   right: 0;
+  background-color: white;
+  border-bottom: 1px solid #eee;
 
   .notes {
     display: flex;
     flex-direction: row;
     justify-content: space-around;
     align-items: center;
-    height: 50px;
     width: 25%;
     padding: 10px 50px 0 50px;
 
     button {
-      height: 75;
-      border: 1px solid red;
-      width: 50;
+      border: none;
       background: none;
       cursor: pointer;
       border-radius: 5px;
@@ -45,7 +44,7 @@ canvas {
       }
 
       &:disabled {
-        color: #eee;
+        color: #aaa;
       }
     }
   }
