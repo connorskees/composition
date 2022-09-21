@@ -50,7 +50,7 @@ const useSharedString = (): SharedString | undefined => {
 }
 
 function isNote(note: MusicalNote): note is Note {
-  return "pitch" in note;
+  return !!note && "pitch" in note;
 }
 
 const linesRendered = new Set();
@@ -560,12 +560,29 @@ const Canvas: React.FC<{
   return <canvas width="1000" height="1000" ref={canvasRef}></canvas>;
 }
 
+function getActiveNote(sharedString: SharedString | undefined): number | null {
+  console.log({sharedString});
+  if (!sharedString) {
+    return null;
+  }
+  for (let i = 0; i < sharedString.getLength(); i++) {
+    if (sharedString.getContainingSegment(i).segment.properties?.isActive) {
+      return i;
+    }
+  }
+  return null;
+}
+
 function App() {
+  const sharedString = useSharedString();
+
   const [activeNote, setActiveNote] = React.useState<number | null>(null);
   const [activeNoteValue, setActiveNoteValue] = React.useState<NoteValue | null>(null);
 
-  const sharedString = useSharedString();
-  
+  React.useEffect(() => {
+    setActiveNote(getActiveNote(sharedString));
+  }, [sharedString]);
+
   React.useEffect(() => {
     const segment = activeNote === null ? null : sharedString?.getContainingSegment(activeNote);
     const { value } = segment?.segment.properties ?? {};
@@ -574,10 +591,14 @@ function App() {
   }, [activeNote, sharedString])
   
   React.useEffect(() => {
+    // initial creation 
     if (!sharedString) {
       return;
     }
-
+    // reload/new tab - sharedString exists
+    if (sharedString.getLength() > 0) {
+      return;
+    }
     for (const bar of bars) {
       for (const note of bar.notes) {
         const len = sharedString.getLength();
