@@ -3,7 +3,7 @@ import React from 'react';
 import { Ribbon } from './Ribbon';
 import { BoundingBox, MousePosition, MusicalNote, Note, NotePitch, NoteValue } from './common';
 import { getHalfNoteCtx, getQuarterNoteCtx, getWholeNoteCtx, halfNotePath, quarterNotePath, wholeNotePath } from './Notes';
-
+import { v4 as uuidv4 } from 'uuid';
 import {
   SharedString, ContainerSchema, IFluidContainer, ConnectionState } from "fluid-framework";
 import { TinyliciousClient } from "@fluidframework/tinylicious-client";
@@ -88,7 +88,7 @@ class RenderableNote {
 
   isActive: boolean = false;
 
-  constructor(private readonly note: MusicalNote) {}
+  constructor(private readonly note: MusicalNote, public id: string) {}
 
   public get value(): NoteValue {
     return this.note.value;
@@ -285,7 +285,7 @@ class Bar {
     sharedString: SharedString,
     noteIdxOffset: number,
     mousePosition: MousePosition,
-  ) {
+  ): string | null {
     const mouseInBox = isMouseInBox(mousePosition, this.bbox);
 
     let hitNote = null;
@@ -296,7 +296,11 @@ class Bar {
       const segment = sharedString.getContainingSegment(noteIdx + noteIdxOffset);
       const props = segment.segment?.properties;
 
-      const note = new RenderableNote(props as MusicalNote);
+      if (!props) {
+        throw new Error();
+      }
+
+      const note = new RenderableNote(props as MusicalNote, props!.id);
 
       const x = this.x + noteIdx * 50;
       const y = this.y + note.heightFromPitch();
@@ -318,7 +322,7 @@ class Bar {
         mouseInBox,
       );
 
-      hitNote ??= hitThisNote ? noteIdx + noteIdxOffset : null;
+      hitNote ??= hitThisNote ? note.id : null;
     }
 
     this.hasActiveOrHovered ||= !!hitNote;
@@ -365,7 +369,7 @@ function drawNotes(
   sharedString: SharedString,
   offset: [number, number],
   mousePosition: MousePosition,
-): number | null {
+): string | null {
   let hitNote = null;
 
   const skipped = new Set();
@@ -417,7 +421,7 @@ const bars = [...Array(20)].map((idx, _) => (new Bar(
   [...Array(4)].map(() => (new RenderableNote({
     value: randomChoice(Object.keys(NoteValue)) as NoteValue,
     pitch: randomChoice([-1, 0, 1, 2, 3, 4, 5, 6, 7])
-  })))
+  }, uuidv4())))
 )));
  
 function useCanvas(handleClick: (a: { clientX: number, clientY: number }) => void) {
@@ -491,24 +495,36 @@ function useMousePos() {
   return { mouseX, mouseY, isMousePressed, scrollPos }
 }
 
+export function findIndex(sharedString: SharedString, id: string): number {
+  for (let i = 0; i < sharedString.getLength(); i++) {
+    if (sharedString.getContainingSegment(i).segment.properties?.id === id) {
+      return i;
+    }
+  }
+
+  throw new Error();
+}
+
 const Canvas: React.FC<{
   sharedString: SharedString,
-  activeNote: number | null,
-  setActiveNote: (n: number | null) => void;
+  activeNote: string | null,
+  setActiveNote: (n: string | null) => void;
   activeNoteValue: NoteValue | null;
   setActiveNoteValue: (v: NoteValue | null) => void;
 }> = ({ sharedString, activeNote, setActiveNote, activeNoteValue }) => {
   const { mouseX, mouseY, isMousePressed, scrollPos } = useMousePos();
 
-  const [hoveredNote, setHoveredNote] = React.useState<number | null>(null);
+  const [hoveredNote, setHoveredNote] = React.useState<string | null>(null);
 
   const handleClick = React.useCallback(({ clientX, clientY }: { clientX: number, clientY: number }) => {
     if (activeNote === hoveredNote) {
       return;
     }
 
-    if (activeNote !== null) {
-      sharedString?.annotateRange(activeNote, activeNote + 1, { isActive: false });
+    
+    if (activeNote !== null && sharedString) {
+      const activeNoteIdx = findIndex(sharedString, activeNote);
+      sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { isActive: false });
     }
 
     if (hoveredNote === null) {
@@ -516,7 +532,10 @@ const Canvas: React.FC<{
       return;
     }
 
-    sharedString?.annotateRange(hoveredNote, hoveredNote + 1, { isActive: true });
+    if (sharedString) {
+      const hoveredNoteIdx = findIndex(sharedString, hoveredNote);
+      sharedString.annotateRange(hoveredNoteIdx, hoveredNoteIdx + 1, { isActive: true });
+    }
 
     setActiveNote(hoveredNote);
   }, [activeNote, hoveredNote, sharedString, setActiveNote]);
@@ -529,16 +548,18 @@ const Canvas: React.FC<{
       return;
     }
 
-    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - Math.floor(activeNote / 16) * 100); //  - activeNote.yOffset
+    const activeNoteIdx = findIndex(sharedString, activeNote);
 
-    const segment = sharedString.getContainingSegment(activeNote);
+    const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - Math.floor(activeNoteIdx / 16) * 100);
+
+    const segment = sharedString.getContainingSegment(activeNoteIdx);
     const { pitch } = segment?.segment?.properties ?? {};
 
     if (potentialPitch === null || potentialPitch === pitch || pitch === undefined) {
       return;
     }
 
-    sharedString.annotateRange(activeNote, activeNote + 1, { pitch: potentialPitch });
+    sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { pitch: potentialPitch });
   }, [sharedString, mouseY, canvasOffset, activeNote, isMousePressed, hoveredNote]);
 
   // draw notes+bars
@@ -560,13 +581,14 @@ const Canvas: React.FC<{
   return <canvas width="1000" height="1000" ref={canvasRef}></canvas>;
 }
 
-function getActiveNote(sharedString: SharedString | undefined): number | null {
+function getActiveNote(sharedString: SharedString | undefined): string | null {
   if (!sharedString) {
     return null;
   }
   for (let i = 0; i < sharedString.getLength(); i++) {
-    if (sharedString.getContainingSegment(i).segment.properties?.isActive) {
-      return i;
+    const props = sharedString.getContainingSegment(i).segment.properties;
+    if (props?.isActive) {
+      return props.id ?? null;
     }
   }
   return null;
@@ -575,7 +597,7 @@ function getActiveNote(sharedString: SharedString | undefined): number | null {
 function App() {
   const sharedString = useSharedString();
 
-  const [activeNote, setActiveNote] = React.useState<number | null>(null);
+  const [activeNote, setActiveNote] = React.useState<string | null>(null);
   const [activeNoteValue, setActiveNoteValue] = React.useState<NoteValue | null>(null);
 
   React.useEffect(() => {
@@ -583,7 +605,13 @@ function App() {
   }, [sharedString]);
 
   React.useEffect(() => {
-    const segment = activeNote === null ? null : sharedString?.getContainingSegment(activeNote);
+    if (activeNote === null || !sharedString) {
+      setActiveNoteValue(null);
+      return;
+    }
+
+    const activeNoteIdx = findIndex(sharedString, activeNote);
+    const segment = sharedString.getContainingSegment(activeNoteIdx);
     const { value } = segment?.segment.properties ?? {};
 
     setActiveNoteValue(value);
@@ -603,7 +631,7 @@ function App() {
         const len = sharedString.getLength();
 
         sharedString.insertText(len, 'X');
-        sharedString.annotateRange(len, len + 1, { value: note.value, pitch: note.pitch });
+        sharedString.annotateRange(len, len + 1, { value: note.value, pitch: note.pitch, id: uuidv4() });
       }
     }
   }, [sharedString]);
@@ -614,7 +642,7 @@ function App() {
         sharedString={sharedString}
         activeNoteValue={activeNoteValue ?? null}
         setActiveNoteValue={setActiveNoteValue}
-        activeNote={activeNote}
+        activeNoteId={activeNote}
         setActiveNote={setActiveNote}
       />
       {sharedString && <Canvas

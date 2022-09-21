@@ -1,5 +1,6 @@
 import { SharedString } from 'fluid-framework';
 import React from 'react';
+import { findIndex } from '../App';
 import { NoteValue } from '../common';
 
 const NoteMap: Record<NoteValue, React.ReactNode> = {
@@ -35,18 +36,20 @@ const NoteMap: Record<NoteValue, React.ReactNode> = {
 };
 
 export const Ribbon: React.FC<{
-    activeNote: number | null,
-    setActiveNote: (n: number | null) => void;
+    activeNoteId: string | null,
+    setActiveNote: (n: string | null) => void;
     sharedString: SharedString | undefined;
     activeNoteValue: NoteValue | null;
     setActiveNoteValue: (v: NoteValue | null) => void;
-}> = ({ sharedString, activeNote, activeNoteValue, setActiveNoteValue }) => {
+}> = ({ sharedString, activeNoteId, activeNoteValue, setActiveNoteValue }) => {
     React.useEffect(() => {
-        if (activeNote === null || activeNoteValue === null || !sharedString) {
+        if (activeNoteId === null || activeNoteValue === null || !sharedString) {
             return;
         }
 
-        sharedString.annotateRange(activeNote, activeNote + 1, { value: activeNoteValue });
+        const activeNoteIdx = findIndex(sharedString, activeNoteId);
+
+        sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { value: activeNoteValue });
     }, [activeNoteValue, sharedString])
 
     return <>
