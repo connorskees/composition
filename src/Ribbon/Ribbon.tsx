@@ -41,13 +41,19 @@ export const Ribbon: React.FC<{
     sharedString: SharedString | undefined;
     activeNoteValue: NoteValue | null;
     setActiveNoteValue: (v: NoteValue | null) => void;
-}> = ({ sharedString, activeNoteId, activeNoteValue, setActiveNoteValue }) => {
+    addNote: () => void;
+    deleteNote: () => void;
+}> = ({ sharedString, activeNoteId, activeNoteValue, setActiveNoteValue, addNote, deleteNote }) => {
     React.useEffect(() => {
         if (activeNoteId === null || activeNoteValue === null || !sharedString) {
             return;
         }
 
         const activeNoteIdx = findIndex(sharedString, activeNoteId);
+
+        if (activeNoteIdx === null) {
+            return;
+        }
 
         sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { value: activeNoteValue });
     }, [activeNoteValue, sharedString])
@@ -66,6 +72,10 @@ export const Ribbon: React.FC<{
                     </button>
                 )
                 }
+            </div>
+            <div>
+                <button onClick={addNote}>Add</button>
+                <button onClick={deleteNote}>Delete</button>
             </div>
         </div>
         <div className="spacer" />

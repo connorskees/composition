@@ -261,6 +261,7 @@ class Bar {
 
   public y: number = 0;
   public offset: [number, number] = [0,0];
+  public len: number = 0;
 
   constructor(
     public notes: RenderableNote[],
@@ -285,24 +286,40 @@ class Bar {
     sharedString: SharedString,
     noteIdxOffset: number,
     mousePosition: MousePosition,
+    barIdx: number,
   ): string | null {
     const mouseInBox = isMouseInBox(mousePosition, this.bbox);
 
     let hitNote = null;
 
     this.hasActiveOrHovered = false;
+   
+    const notes = [];
 
-    for (let noteIdx = 0; noteIdx < 4; noteIdx += 1) {
-      const segment = sharedString.getContainingSegment(noteIdx + noteIdxOffset);
-      const props = segment.segment?.properties;
-
+    let noteIdx = 0;
+    let props = sharedString.getContainingSegment(noteIdx + noteIdxOffset).segment?.properties;
+    
+    while (props?.barIdx === barIdx) {
       if (!props) {
         throw new Error();
       }
 
+      notes.push(props);
+
+      noteIdx += 1;
+      props = sharedString.getContainingSegment(noteIdx + noteIdxOffset).segment?.properties;
+    }
+    
+    for (let i = 0; i < notes.length; i++) {
+      const props = notes[i];
+
       const note = new RenderableNote(props as MusicalNote, props!.id);
 
-      const x = this.x + noteIdx * 50;
+      const spaceBetween = (250 - 70 - 20 * notes.length) / (notes.length - 1);
+
+      const x = notes.length > 1
+        ? this.idx * 250 + 35 + i * spaceBetween + i * 20
+        : this.idx * 250 + 250 / 2;
       const y = this.y + note.heightFromPitch();
 
       this.adjustNoteBbox(note, x, y);
@@ -326,6 +343,8 @@ class Bar {
     }
 
     this.hasActiveOrHovered ||= !!hitNote;
+
+    this.len = noteIdx;
 
     return hitNote;
   }
@@ -374,7 +393,9 @@ function drawNotes(
 
   const skipped = new Set();
 
-  for (let barIdx = 0; barIdx < bars.length; barIdx += 4) {
+  const barCount = sharedString.getContainingSegment(sharedString.getLength() - 1).segment?.properties?.barIdx ?? 0;
+
+  for (let barIdx = 0; barIdx < barCount; barIdx += 4) {
     const barsRange = bars.slice(barIdx, barIdx + 4);
     const y = Math.floor(barIdx / 4) * 100;
 
@@ -395,12 +416,15 @@ function drawNotes(
     drawLines(context, y);
   }  
 
-  for (let barIdx = 0; barIdx < bars.length; barIdx++) {
+  let barIdxOffset = 0;
+
+  for (let barIdx = 0; barIdx < barCount; barIdx++) {
     const bar = bars[barIdx];
 
     const y = Math.floor(barIdx / 4) * 100;
 
     if (skipped.has(barIdx)) {
+      barIdxOffset += bar.len;
       continue;
     }
 
@@ -410,7 +434,8 @@ function drawNotes(
     bar.y = y;
     bar.offset = offset;
 
-    const hitThisNote = bar.render(context, sharedString, barIdx * 4, mousePosition);
+    const hitThisNote = bar.render(context, sharedString, barIdxOffset, mousePosition, barIdx);
+    barIdxOffset += bar.len;
     hitNote ??= hitThisNote
   }
 
@@ -495,14 +520,14 @@ function useMousePos() {
   return { mouseX, mouseY, isMousePressed, scrollPos }
 }
 
-export function findIndex(sharedString: SharedString, id: string): number {
+export function findIndex(sharedString: SharedString, id: string): number | null {
   for (let i = 0; i < sharedString.getLength(); i++) {
     if (sharedString.getContainingSegment(i).segment.properties?.id === id) {
       return i;
     }
   }
 
-  throw new Error();
+  return null;
 }
 
 const Canvas: React.FC<{
@@ -511,7 +536,8 @@ const Canvas: React.FC<{
   setActiveNote: (n: string | null) => void;
   activeNoteValue: NoteValue | null;
   setActiveNoteValue: (v: NoteValue | null) => void;
-}> = ({ sharedString, activeNote, setActiveNote, activeNoteValue }) => {
+  forceRerender: boolean;
+}> = ({ sharedString, activeNote, setActiveNote, activeNoteValue, forceRerender }) => {
   const { mouseX, mouseY, isMousePressed, scrollPos } = useMousePos();
 
   const [hoveredNote, setHoveredNote] = React.useState<string | null>(null);
@@ -524,7 +550,9 @@ const Canvas: React.FC<{
     
     if (activeNote !== null && sharedString) {
       const activeNoteIdx = findIndex(sharedString, activeNote);
-      sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { isActive: false });
+      if (activeNoteIdx !== null) {
+        sharedString.annotateRange(activeNoteIdx, activeNoteIdx + 1, { isActive: false });
+      }
     }
 
     if (hoveredNote === null) {
@@ -534,7 +562,9 @@ const Canvas: React.FC<{
 
     if (sharedString) {
       const hoveredNoteIdx = findIndex(sharedString, hoveredNote);
-      sharedString.annotateRange(hoveredNoteIdx, hoveredNoteIdx + 1, { isActive: true });
+      if (hoveredNoteIdx !== null) {
+        sharedString.annotateRange(hoveredNoteIdx, hoveredNoteIdx + 1, { isActive: true });
+      }
     }
 
     setActiveNote(hoveredNote);
@@ -549,6 +579,10 @@ const Canvas: React.FC<{
     }
 
     const activeNoteIdx = findIndex(sharedString, activeNote);
+
+    if (activeNoteIdx === null) {
+      return;
+    }
 
     const potentialPitch = pitchFromHeight(mouseY - 50 - canvasOffset[1] - Math.floor(activeNoteIdx / 16) * 100);
 
@@ -576,7 +610,7 @@ const Canvas: React.FC<{
     } else {
       canvasStyle.cursor = "auto";
     }
-  }, [sharedString, mouseX, mouseY, context, canvasOffset, activeNote, isMousePressed, canvasRef, scrollPos, activeNoteValue]);
+  }, [sharedString, mouseX, mouseY, context, canvasOffset, activeNote, isMousePressed, canvasRef, scrollPos, activeNoteValue, forceRerender]);
 
   return <canvas width="1000" height="1000" ref={canvasRef}></canvas>;
 }
@@ -600,6 +634,8 @@ function App() {
   const [activeNote, setActiveNote] = React.useState<string | null>(null);
   const [activeNoteValue, setActiveNoteValue] = React.useState<NoteValue | null>(null);
 
+  const [forceRerender, setForceRerender] = React.useState(false);
+
   React.useEffect(() => {
     setActiveNote(getActiveNote(sharedString));
   }, [sharedString]);
@@ -611,6 +647,11 @@ function App() {
     }
 
     const activeNoteIdx = findIndex(sharedString, activeNote);
+
+    if (activeNoteIdx === null) {
+      return;
+    }
+
     const segment = sharedString.getContainingSegment(activeNoteIdx);
     const { value } = segment?.segment.properties ?? {};
 
@@ -626,15 +667,67 @@ function App() {
     if (sharedString.getLength() > 0) {
       return;
     }
+    let barIdx = 0;
     for (const bar of bars) {
       for (const note of bar.notes) {
         const len = sharedString.getLength();
 
         sharedString.insertText(len, 'X');
-        sharedString.annotateRange(len, len + 1, { value: note.value, pitch: note.pitch, id: uuidv4() });
+        sharedString.annotateRange(
+          len,
+          len + 1,
+          { barIdx, value: note.value, pitch: note.pitch, id: uuidv4() }
+        );
       }
+      barIdx += 1;
     }
   }, [sharedString]);
+
+  const addNote = React.useCallback(() => {
+    if (!sharedString || activeNote === null) {
+      return;
+    }
+
+    let idx = findIndex(sharedString, activeNote);
+
+    if (idx === null) {
+      return;
+    }
+
+    const barIdx = sharedString.getContainingSegment(idx).segment?.properties?.barIdx ?? 0;
+
+    if (bars[barIdx].len === 8) {
+      return;
+    }
+
+    idx += 1;
+
+    sharedString.insertText(idx, 'X');
+    sharedString.annotateRange(idx, idx + 1, { barIdx, value: NoteValue.Quarter, pitch: 0, id: uuidv4() });
+
+    setForceRerender(v => !v);
+  }, [sharedString, activeNote]);
+
+  const deleteNote = React.useCallback(() => {
+    if (!sharedString || activeNote === null) {
+      return;
+    }
+
+    const idx = findIndex(sharedString, activeNote);
+
+    if (idx === null) {
+      return;
+    }
+
+    const barIdx = sharedString.getContainingSegment(idx).segment?.properties?.barIdx ?? 0;
+
+    if (bars[barIdx].len === 1) {
+      return;
+    }
+
+    sharedString.removeRange(idx, idx + 1);
+    setForceRerender(v => !v);
+  }, [sharedString, activeNote]);
 
   return (
     <>
@@ -644,6 +737,8 @@ function App() {
         setActiveNoteValue={setActiveNoteValue}
         activeNoteId={activeNote}
         setActiveNote={setActiveNote}
+        addNote={addNote}
+        deleteNote={deleteNote}
       />
       {sharedString && <Canvas
         sharedString={sharedString}
@@ -651,6 +746,7 @@ function App() {
         setActiveNoteValue={setActiveNoteValue}
         activeNote={activeNote}
         setActiveNote={setActiveNote}
+        forceRerender={forceRerender}
       />}
     </>
   );
