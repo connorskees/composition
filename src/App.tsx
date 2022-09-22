@@ -397,6 +397,7 @@ function App() {
     }
 
     sharedString.removeRange(idx, idx + 1);
+    setActiveNoteValue(null);
     setForceRerender(v => !v);
   }, [sharedString, activeNote]);
 
