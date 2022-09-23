@@ -11,6 +11,27 @@ canvas {
   height: 1000px;
 }
 
+.button-base {
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 5px 10px;
+  color: black;
+
+  &:hover {
+    background-color: rgb(223, 223, 255);
+  }
+
+  &.active {
+    color: blue;
+  }
+
+  &:disabled {
+    color: #aaa;
+  }
+}
+
 .ribbon {
   position: fixed;
   top: 0;
@@ -28,28 +49,26 @@ canvas {
     padding: 10px 50px 0 50px;
 
     button {
-      border: none;
-      background: none;
-      cursor: pointer;
-      border-radius: 5px;
-      padding: 5px 10px;
-      color: black;
-
-      &:hover {
-        background-color: rgb(223, 223, 255);
-      }
-
-      &.active {
-        color: blue;
-      }
-
-      &:disabled {
-        color: #aaa;
-      }
+      @extend .button-base;
     }
   }
 
-  
+  .actions {
+    display: flex;
+    flex-direction: row;
+
+  }
+
+  .add-or-delete {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+
+    button {
+      @extend .button-base;
+    }
+  }
 }
 
 .spacer {

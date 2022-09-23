@@ -60,22 +60,24 @@ export const Ribbon: React.FC<{
 
     return <>
         <div className="ribbon">
-            <div className="notes">
-                {Object.values(NoteValue).map(
-                    (val) => <button
-                        type="button"
-                        disabled={!activeNoteValue}
-                        key={val}
-                        className={activeNoteValue === val ? "active" : ""}
-                        onClick={() => setActiveNoteValue(val)}>
-                        {NoteMap[val] ?? val}
-                    </button>
-                )
-                }
-            </div>
-            <div>
-                <button onClick={addNote}>Add</button>
-                <button onClick={deleteNote}>Delete</button>
+            <div className="actions">
+                <div className="notes">
+                    {Object.values(NoteValue).map(
+                        (val) => <button
+                            type="button"
+                            disabled={!activeNoteValue}
+                            key={val}
+                            className={activeNoteValue === val ? "active" : ""}
+                            onClick={() => setActiveNoteValue(val)}>
+                            {NoteMap[val] ?? val}
+                        </button>
+                    )
+                    }
+                </div>
+                <div className="add-or-delete">
+                    <button onClick={addNote} disabled={activeNoteValue === null}>Add</button>
+                    <button onClick={deleteNote} disabled={activeNoteValue === null}>Delete</button>
+                </div>
             </div>
         </div>
         <div className="spacer" />
