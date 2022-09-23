@@ -66,7 +66,7 @@ function drawNotes(
 
   const barCount = sharedString.getContainingSegment(sharedString.getLength() - 1).segment?.properties?.barIdx ?? 0;
 
-  for (let barIdx = 0; barIdx < barCount; barIdx += 4) {
+  for (let barIdx = 0; barIdx < barCount + 1; barIdx += 4) {
     const barsRange = bars.slice(barIdx, barIdx + 4);
     const y = Math.floor(barIdx / 4) * 100;
 
@@ -89,8 +89,13 @@ function drawNotes(
 
   let barIdxOffset = 0;
 
-  for (let barIdx = 0; barIdx < barCount; barIdx++) {
+
+  for (let barIdx = 0; barIdx < barCount + 1; barIdx++) {
     const bar = bars[barIdx];
+
+    if (!bar) {
+      break;
+    }
 
     const y = Math.floor(barIdx / 4) * 100;
 
