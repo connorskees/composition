@@ -1,7 +1,7 @@
 import './App.scss';
 import React from 'react';
 import { Ribbon } from './Ribbon';
-import { MousePosition, NoteValue } from './common';
+import { MousePosition, NoteValue, valueToInteger } from './common';
 import { v4 as uuidv4 } from 'uuid';
 import {
   SharedString, ContainerSchema, IFluidContainer, ConnectionState } from "fluid-framework";
@@ -118,13 +118,36 @@ function drawNotes(
   return hitNote;
 }
 
-const bars = [...Array(20)].map((idx, _) => (new Bar(
-  [...Array(4)].map(() => (new RenderableNote({
-    value: randomChoice(Object.keys(NoteValue)) as NoteValue,
-    pitch: randomChoice([-1, 0, 1, 2, 3, 4, 5, 6, 7])
-  }, uuidv4())))
-)));
- 
+function getInitBars(barCount: number): Bar[] {
+  const bars = [];
+
+  for (let i = 0; i < barCount; i += 1) {
+    const bar = new Bar([]);
+    let barValue = 4;
+
+    while (barValue > 0) {
+      const value = randomChoice(Object.keys(NoteValue)) as NoteValue;
+      const valAsInt = valueToInteger(value);
+
+      if (barValue - valAsInt < 0) {
+        continue;
+      }
+
+      const pitch = randomChoice([-1, 0, 1, 2, 3, 4, 5, 6, 7]);
+
+      barValue -= valAsInt;
+
+      bar.notes.push(new RenderableNote({ value, pitch }, uuidv4()));
+    }
+
+    bars.push(bar);
+  }
+
+  return bars;
+}
+
+const bars = getInitBars(20);
+
 function useCanvas(handleClick: (a: { clientX: number, clientY: number }) => void) {
   const canvasRef = React.useRef<HTMLCanvasElement>(null);
   const [canvasOffset, setCanvasOffset] = React.useState<[number, number]>([0.0, 50.0]);

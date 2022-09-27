@@ -7,6 +7,17 @@ export enum NoteValue {
     // Sixteenth = 'Sixteenth',
 }
 
+export function valueToInteger(val: NoteValue): number {
+    switch (val) {
+        case NoteValue.Whole:
+            return 4;
+        case NoteValue.Half:
+            return 2;
+        case NoteValue.Quarter:
+            return 1;
+    }
+}
+
 export type NotePitch = number;
 
 export interface Note {
